@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Teknisi - Job Monitoring</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        body { background-color: #f4f6f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .navbar { background-color: #2c3e50; }
+        .card-job { border-left: 5px solid #dc3545; transition: 0.3s; margin-bottom: 15px;}
+        .card-job:hover { box-shadow: 0 4px 8px rgba(0,0,0,0.1); transform: translateY(-2px); }
+        .badge-status { font-size: 0.85em; }
+        .foto-preview { max-width: 100%; height: auto; display: none; margin-top: 10px; border-radius: 5px;}
+        #loading-indicator { display: none; }
+        #debug-panel { 
+            display: none; font-family: monospace; font-size: 13px; 
+            background-color: #2c3e50; color: #2ecc71; padding: 15px; 
+            border-radius: 5px; max-height: 250px; overflow-y: auto; margin-bottom: 20px;
+        }
+        .detail-box { background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 12px; margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar navbar-dark mb-4">
+        <div class="container">
+            <span class="navbar-brand mb-0 h1"><i class="fas fa-tools me-2"></i>TechMonitor - Task List</span>
+            <span class="text-light">Halo, Teknisi</span>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- TABS NAVIGASI -->
+        <ul class="nav nav-pills mb-3" id="pills-tab" role="tablist">
+            <li class="nav-item">
+                <button class="nav-link active" id="pills-todo-tab" data-bs-toggle="pill" data-bs-target="#pills-todo" type="button">
+                    <i class="fas fa-clipboard-list me-1"></i> Job Aktif (<span id="count-job">0</span>)
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" id="pills-done-tab" data-bs-toggle="pill" data-bs-target="#pills-done" type="button">
+                    <i class="fas fa-check-circle me-1"></i> Riwayat Selesai
+                </button>
+            </li>
+        </ul>
+
+        <!-- ========================================== -->
+        <!-- TAMBAHAN FITUR FILTER LINE MESIN DISINI    -->
+        <!-- ========================================== -->
+        <div class="row mb-3">
+            <div class="col-md-4 col-sm-8">
+                <div class="input-group shadow-sm">
+                    <span class="input-group-text bg-white border-end-0">
+                        <i class="fas fa-filter text-primary"></i>
+                    </span>
+                    <!-- Dropdown ini akan otomatis diisi oleh JavaScript nanti -->
+                    <select id="filterLine" class="form-select border-start-0" onchange="terapkanFilterLine()">
+                        <option value="ALL">Tampilkan Semua Line</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <!-- ========================================== -->
+
+        <div id="debug-panel"><strong class="text-white">=== DIAGNOSA SISTEM ===</strong><br></div>
+
+        <div id="loading-indicator" class="text-center my-3">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2 text-muted fw-bold">Sedang mengambil data dari Mesin...</p>
+        </div>
+
+        <div class="tab-content" id="pills-tabContent">
+            <div class="tab-pane fade show active" id="pills-todo">
+                <div class="row" id="job-container"></div>
+            </div>
+            <div class="tab-pane fade" id="pills-done">
+                <div class="alert alert-info">Riwayat pekerjaan nantinya akan ditarik dari Google Sheets (Fitur Menyusul).</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Form Pengerjaan -->
+    <div class="modal fade" id="modalKerjakan" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="judulModalForm">Form Penyelesaian Job</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formPengerjaan">
+                        <!-- Data Tersembunyi untuk backend -->
+                        <input type="text" id="hiddenJobName" style="display:none;">
+                        <input type="text" id="hiddenLine" style="display:none;">
+                        <input type="text" id="hiddenIdCard" style="display:none;">
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Nama Teknisi Perbaikan</label>
+                            <input type="text" id="inputTeknisi" class="form-control" placeholder="Masukkan nama Anda..." required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Tindakan / Catatan Perbaikan</label>
+                            <textarea id="inputTindakan" class="form-control" rows="3" placeholder="Jelaskan apa yang sudah diperbaiki..." required></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Upload Foto Bukti (Disimpan ke Drive)</label>
+                            <input class="form-control" type="file" id="fotoBukti" accept="image/*" onchange="previewImage(event)">
+                            <img id="preview" class="foto-preview">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                    <!-- Tombol ini sudah tersambung ke script simpan -->
+                    <button type="button" id="btnSimpan" class="btn btn-success" onclick="simpanDataPengerjaan()">
+                        <i class="fas fa-paper-plane me-1"></i> Simpan Selesai
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Memanggil File JavaScript Anda -->
+    <script src="script.js"></script>
+</body>
+</html>
